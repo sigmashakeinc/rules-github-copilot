@@ -1,0 +1,51 @@
+# copilot_exec_security.rules — GitHub Copilot execution security.
+# Technology: copilot | Capability: exec
+# Covers: secret tokens in shell commands, generated script execution,
+# package installation from suggestions, and pre-push audit.
+
+rule no-copilot-token-in-command {
+  enabled true
+  priority 95
+  severity error
+  DENY execution
+  IF command REGEX "ghp_[a-zA-Z0-9]{36}"
+  OR command REGEX "github_pat_[a-zA-Z0-9_]{82}"
+  OR command REGEX "(AKIA|ASIA)[A-Z0-9]{16}"
+  OR command REGEX "sk-[a-zA-Z0-9]{20,}"
+  OR command REGEX "xoxb-[0-9]+-[0-9]+-[a-zA-Z0-9]+"
+  MESSAGE "Secret token in shell command. CamoLeak research demonstrated that Copilot can suggest commands containing real credentials. Passing tokens as command-line arguments exposes them in process lists, shell history, and CI logs. Use environment variables or credential helpers."
+}
+
+rule ask-copilot-execute-generated-script {
+  enabled true
+  priority 80
+  severity warning
+  ASK execution
+  IF command REGEX "python3?\\s+[^-][a-zA-Z0-9_/-]+\\.py$"
+  OR command REGEX "node\\s+[^-][a-zA-Z0-9_/-]+\\.js$"
+  OR command REGEX "bash\\s+[^-][a-zA-Z0-9_/-]+\\.sh$"
+  MESSAGE "Executing a generated script. An ACM study found 29.5% of Copilot-generated Python and 24.2% of JavaScript contains security weaknesses. Scripts should be reviewed before execution, especially those that handle user input, network requests, or file operations."
+  PROMPT "Has this script been reviewed for: SQL injection, hardcoded credentials, unvalidated input, and unsafe subprocess calls? Copilot-generated scripts frequently contain OWASP Top 10 vulnerabilities from older training data patterns."
+}
+
+rule ask-copilot-package-install {
+  enabled true
+  priority 80
+  severity warning
+  ASK execution
+  IF command REGEX "pip3?\\s+install\\s+[a-zA-Z]"
+  OR command REGEX "npm\\s+install\\s+[a-zA-Z@]"
+  OR command REGEX "pip3?\\s+install\\s+-r"
+  MESSAGE "Package installation from Copilot suggestion. Copilot may suggest typosquatted or deprecated packages from training data. 'requests2', 'urllib3-fix', and thousands of malicious typosquats exist on PyPI and npm."
+  PROMPT "Verify this exact package name at npmjs.com or pypi.org. Check: (1) is it the canonical package? (2) weekly download count (typosquats have very few), (3) last publish date, (4) publisher identity matches expectations."
+}
+
+rule log-copilot-pre-push {
+  enabled true
+  priority 65
+  severity info
+  LOG execution
+  IF command STARTS_WITH "git push"
+  OR command REGEX "git\\s+push\\s"
+  MESSAGE "Git push from Copilot session. CamoLeak demonstrated silent exfiltration of secrets from private repos via Copilot Chat. Verify no secrets were added to tracked files before pushing. Run 'git diff HEAD --stat' to review changes."
+}

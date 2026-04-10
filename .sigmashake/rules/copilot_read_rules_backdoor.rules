@@ -1,0 +1,51 @@
+# copilot_read_rules_backdoor.rules — GitHub Copilot Rules File Backdoor protection.
+# Technology: copilot | Capability: read
+# Covers: Rules File Backdoor attack (Pillar Security), hidden control characters
+# in Copilot config files, bidirectional text override, and instruction file auditing.
+
+rule no-copilot-hidden-chars-in-rules {
+  enabled true
+  priority 100
+  severity error
+  DENY read
+  IF path ENDS_WITH ".copilot-rules" AND content REGEX "[\\x00-\\x08\\x0e-\\x1f\\x7f]"
+  OR path CONTAINS "copilot-instructions.md" AND content REGEX "[\\x00-\\x08\\x0e-\\x1f\\x7f]"
+  OR path CONTAINS "copilot-instructions" AND content REGEX "[\\x00-\\x08\\x0e-\\x1f\\x7f]"
+  MESSAGE "Rules File Backdoor: hidden control characters in Copilot config. Pillar Security discovered that attackers embed invisible malicious instructions (using control characters 0x00-0x1f) in .copilot-rules files. These instructions are invisible in editors but processed by Copilot, silently altering all code suggestions."
+}
+
+rule ask-copilot-rules-file-modification {
+  enabled true
+  priority 90
+  severity warning
+  ASK write
+  IF path ENDS_WITH ".copilot-rules"
+  OR path CONTAINS ".github/copilot-instructions"
+  OR path CONTAINS "copilot-config"
+  OR path ENDS_WITH ".github/copilot.yml"
+  MESSAGE "Copilot configuration file modification. The Rules File Backdoor attack embeds hidden instructions in these files that silently alter Copilot's behavior for all developers using the repository. This is a documented supply chain attack vector."
+  PROMPT "Inspect this file for hidden Unicode (zero-width spaces, bidirectional overrides, control characters). Run 'cat -A <file>' or open in a hex editor to verify no invisible content is present before committing."
+}
+
+rule no-copilot-bidi-override-chars {
+  enabled true
+  priority 95
+  severity error
+  DENY write
+  IF content REGEX "\\\\u202[a-eA-E]"
+  OR content REGEX "\\\\u2066|\\\\u2067|\\\\u2068|\\\\u2069"
+  OR content REGEX "\\\\u200[b-fB-F]"
+  OR content REGEX "\\\\ufeff"
+  MESSAGE "Bidirectional text override or zero-width Unicode characters. These are the exact character classes used in Rules File Backdoor attacks to hide malicious Copilot instructions that are invisible when rendered in editors, code review tools, and GitHub diffs, but are processed by the Copilot language model."
+}
+
+rule log-copilot-instruction-file-access {
+  enabled true
+  priority 55
+  severity info
+  LOG read
+  IF path CONTAINS "copilot" AND path ENDS_WITH ".md"
+  OR path CONTAINS "copilot" AND path ENDS_WITH ".yml"
+  OR path CONTAINS "copilot" AND path ENDS_WITH ".yaml"
+  MESSAGE "Copilot instruction file accessed. All reads of Copilot config files are logged for Rules File Backdoor detection. Monitor for unexpected modifications to these files — especially in recently cloned repositories."
+}
