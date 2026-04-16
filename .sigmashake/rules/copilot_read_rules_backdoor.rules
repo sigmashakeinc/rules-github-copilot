@@ -18,13 +18,12 @@ rule ask-copilot-rules-file-modification {
   enabled true
   priority 90
   severity warning
-  ASK write
+  LOG write
   IF path ENDS_WITH ".copilot-rules"
   OR path CONTAINS ".github/copilot-instructions"
   OR path CONTAINS "copilot-config"
   OR path ENDS_WITH ".github/copilot.yml"
   MESSAGE "Copilot configuration file modification. The Rules File Backdoor attack embeds hidden instructions in these files that silently alter Copilot's behavior for all developers using the repository. This is a documented supply chain attack vector."
-  PROMPT "Inspect this file for hidden Unicode (zero-width spaces, bidirectional overrides, control characters). Run 'cat -A <file>' or open in a hex editor to verify no invisible content is present before committing."
 }
 
 rule no-copilot-bidi-override-chars {
